@@ -4,7 +4,8 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::KeyModifiers;
 use crossterm::style::Color;
-use crossterm::{cursor, QueueableCommand};
+use crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
+use crossterm::{cursor, ExecutableCommand, QueueableCommand};
 
 use rand::seq::SliceRandom;
 
@@ -599,6 +600,8 @@ impl GameScreen {
 
         let mut s = stdout();
 
+        s.execute(BeginSynchronizedUpdate)?;
+
         // stack top
         s.queue(cursor::MoveToColumn(padding_left))?;
         s.queue(style::Print("╔"))?;
@@ -608,12 +611,30 @@ impl GameScreen {
         }
         s.queue(style::Print("╗\n"))?;
 
-        // stack content
+        // Draw the stack content, including the current piece. This way there is
+        // no intermediate state with the piece blanked out. Alternative would be
+        // to rasterize the piece in a copy of a the stack.
+        let mut tetro_coord = (0, 0); // coordinates of a grid block piece local frame
         for row in (0..STACK_NUM_ROWS).rev() {
             s.queue(cursor::MoveToColumn(padding_left))?;
             s.queue(style::Print("║"))?;
+            tetro_coord.1 = row as i8 - ttrys.cur_position.1;
             for col in 0..STACK_NUM_COLS {
-                let block = ttrys.stack[row * STACK_NUM_COLS + col];
+                let mut block = ttrys.stack[row * STACK_NUM_COLS + col];
+
+                // rasterize the current piece
+                if let Some(tetro) = ttrys.cur_tetro {
+                    tetro_coord.0 = col as i8 - ttrys.cur_position.0;
+                    if (0..=3).contains(&tetro_coord.0) && (-3..=0).contains(&tetro_coord.1) {
+                        if TETROMINO_DATA[tetro as usize]
+                            [<RotationState as Into<usize>>::into(ttrys.cur_state)]
+                        .contains(&tetro_coord)
+                        {
+                            block = Mino::Occupied(tetro_color(tetro))
+                        }
+                    }
+                }
+
                 match block {
                     Mino::Occupied(color) => {
                         s.queue(style::SetBackgroundColor(color))?;
@@ -641,33 +662,6 @@ impl GameScreen {
             s.queue(style::Print(&horiz_border))?;
         }
         s.queue(style::Print("╝"))?;
-
-        // draw current tetromino
-        s.queue(cursor::SavePosition)?;
-        if let Some(tetro) = ttrys.cur_tetro {
-            s.queue(cursor::MoveToPreviousLine(
-                (ttrys.cur_position.1 + 1) as u16,
-            ))?;
-            s.queue(cursor::MoveToColumn(
-                ((padding_left + 1) as i8 + (2 * ttrys.cur_position.0)) as u16,
-            ))?;
-            let position = cursor::position().unwrap();
-            let minos: [(i8, i8); 4] = TETROMINO_DATA[tetro as usize]
-                [<RotationState as Into<usize>>::into(ttrys.cur_state)];
-            s.queue(style::SetBackgroundColor(tetro_color(tetro)))?;
-            for mino in minos {
-                if mino.0 > 0 {
-                    s.queue(cursor::MoveRight(2 * mino.0 as u16))?;
-                }
-                if mino.1 < 0 {
-                    s.queue(cursor::MoveDown(-(mino.1) as u16))?;
-                }
-                s.queue(style::Print("  "))?;
-                s.queue(cursor::MoveTo(position.0, position.1))?;
-            }
-            s.queue(style::ResetColor)?;
-        }
-        s.queue(cursor::RestorePosition)?;
 
         // draw next tetromino
         s.queue(cursor::SavePosition)?;
@@ -722,6 +716,8 @@ impl GameScreen {
         s.queue(cursor::MoveToPreviousLine((STACK_NUM_ROWS + 1) as u16))?;
 
         s.flush().ok();
+
+        s.execute(EndSynchronizedUpdate)?;
 
         Ok(s)
     }
