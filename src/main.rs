@@ -211,7 +211,7 @@ impl Ttrys {
         match self.state {
             State::Spawn => {
                 self.cur_tetro = Some(self.sequence.pop());
-                self.cur_position = (STACK_NUM_COLS as i8 / 2, (STACK_NUM_ROWS - 1) as i8);
+                self.cur_position = ((STACK_NUM_COLS as i8 / 2) - 2, (STACK_NUM_ROWS - 1) as i8);
                 if let Some(Tetromino::I) = self.cur_tetro {
                     self.cur_position.1 += 1;
                 }
