@@ -324,6 +324,9 @@ impl Ttrys {
                 }
                 self.stack_height -= self.clear_rows.len() as i8 - 1;
                 self.clear_rows.clear();
+
+                self.cur_tetro = None;
+
                 self.state = State::Spawn;
 
                 // update score
