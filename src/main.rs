@@ -159,7 +159,7 @@ struct Ttrys {
     cur_position: (i8, i8),
     cur_state: RotationState,
     clear_rows: Vec<i8>,
-    score: u32,
+    score: (u32, u32), // line cleared / points
     level: u32,
     state: State,
     saved_state: State,
@@ -175,7 +175,7 @@ impl Ttrys {
             cur_position: (0, 0),
             cur_state: RotationState::default(),
             clear_rows: Vec::new(),
-            score: 0,
+            score: (0, 0),
             level: 0,
             state: State::Spawn,
             saved_state: State::End,
@@ -328,9 +328,10 @@ impl Ttrys {
 
                 // update score
                 for streak in clear_streaks {
-                    self.score += self.clear_reward(streak);
+                    self.score.1 += self.clear_reward(streak);
+                    self.score.0 += streak as u32;
                 }
-                self.level = self.score / 1000;
+                self.level = self.score.1 / 1000;
             }
             _ => (),
         }
@@ -430,7 +431,7 @@ impl Ttrys {
         self.level
     }
 
-    fn score(&self) -> u32 {
+    fn score(&self) -> (u32, u32) {
         self.score
     }
 
@@ -707,7 +708,12 @@ impl GameScreen {
             padding_left as u16 + 2 + 2 * STACK_NUM_COLS as u16 + 5,
         ))?;
         s.queue(cursor::MoveDown(1))?;
-        s.queue(style::Print(format!("Score: {:}", ttrys.score)))?;
+        s.queue(style::Print(format!("Score: {}", ttrys.score.1)))?;
+        s.queue(cursor::MoveToColumn(
+            padding_left as u16 + 2 + 2 * STACK_NUM_COLS as u16 + 5,
+        ))?;
+        s.queue(cursor::MoveDown(1))?;
+        s.queue(style::Print(format!("Lines: {}", ttrys.score.0)))?;
         s.queue(cursor::RestorePosition)?;
 
         s.queue(cursor::MoveToPreviousLine((STACK_NUM_ROWS + 1) as u16))?;
@@ -769,5 +775,5 @@ fn main() {
         }
     }
     //display.clean_up();
-    println!("Game over ! {} pts\x1b[0K", ttrys.score());
+    println!("Game over ! {} pts\x1b[0K", ttrys.score().1);
 }
