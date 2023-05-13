@@ -147,6 +147,7 @@ impl Distribution<Tetromino> for Standard {
 enum State {
     Spawn,
     Fall,
+    HardDrop,
     Lock,
     ClearRows,
     Paused,
@@ -157,7 +158,6 @@ struct Ttrys {
     cur_tetro: Option<Tetromino>,
     cur_position: (i8, i8),
     cur_state: RotationState,
-    hard_drop: bool,
     clear_rows: Vec<i8>,
     score: u32,
     level: u32,
@@ -174,7 +174,6 @@ impl Ttrys {
             cur_tetro: None,
             cur_position: (0, 0),
             cur_state: RotationState::default(),
-            hard_drop: false,
             clear_rows: Vec::new(),
             score: 0,
             level: 0,
@@ -223,20 +222,19 @@ impl Ttrys {
                     State::Fall
                 };
             }
+            State::HardDrop => {
+                let mut offset = -1;
+                while !self.collide(self.cur_state, (0, offset)) {
+                    offset -= 1;
+                }
+                self.cur_position.1 += offset + 1;
+                self.state = State::Lock;
+            }
             State::Fall => {
-                if self.hard_drop {
-                    let mut offset = -1;
-                    while !self.collide(self.cur_state, (0, offset)) {
-                        offset -= 1;
-                    }
-                    self.cur_position.1 += offset + 1;
+                if self.collide(self.cur_state, (0, -1)) {
                     self.state = State::Lock;
                 } else {
-                    if self.collide(self.cur_state, (0, -1)) {
-                        self.state = State::Lock;
-                    } else {
-                        self.cur_position.1 -= 1;
-                    }
+                    self.cur_position.1 -= 1;
                 }
             }
             State::Lock => {
@@ -287,8 +285,6 @@ impl Ttrys {
                 } else {
                     self.state = State::Spawn;
                 }
-
-                self.hard_drop = false;
             }
             State::ClearRows => {
                 // Drop rows down where cleared rows have left space.
@@ -409,7 +405,11 @@ impl Ttrys {
                     self.cur_position.1 += offset.1;
                 }
             }
-            UserAction::HardDrop => self.hard_drop = true,
+            UserAction::HardDrop => {
+                if self.state == State::Fall {
+                    self.state = State::HardDrop;
+                }
+            }
             UserAction::Quit => {
                 self.state = State::End;
             }
